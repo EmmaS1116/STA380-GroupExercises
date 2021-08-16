@@ -1,0 +1,1201 @@
+---
+Title: "STA380 - Exercise"
+Author: "Leyang Xu/Liyao Wang/Xiaohan Sun/Yue Cui"
+Github Repo Link: "https://github.com/EmmaS1116/STA380-GroupExercises"
+output:
+  pdf_document:
+    latex_engine: xelatex
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Question 1: Green Buildings
+
+In this part of assignment, our goal is to provide insights and suggestion to the developer on whether he should invest this project of green building based on our explanoatory analysis of the dataset. 
+
+```{r echo=FALSE,message=FALSE,error=FALSE}
+library(mosaic)
+library(ggplot2)
+library(tidyverse)
+library(dplyr)
+library(reshape2)
+green_buildings = read.csv('https://raw.githubusercontent.com/EmmaS1116/STA380/master/data/greenbuildings.csv')
+
+# CREATES NEW DATA SETS OF JUST GREEN/NON GREEN BUILDINGS
+######
+green_buildings_green=subset(green_buildings,green_rating==1)
+green_buildings_not_green=subset(green_buildings,green_rating==0)
+```
+
+
+Let's look at the analysis from the on-staff stats guru first.
+
+According the on-staff stats guru, he cleaned the data by removing those buildings that had very low occupacy rate. Let's look at the occupacy rate of buildings in our data.
+
+```{r echo=FALSE,message=FALSE,error=FALSE}
+ggplot(green_buildings)+ggtitle('Leasing Rate')+
+geom_histogram(data=green_buildings_not_green,aes(x= leasing_rate),fill='grey')+
+geom_histogram(data=green_buildings_green,aes(x=leasing_rate),fill='green')
+```
+
+As we can see see from the histogram above, there are more outlier on leasing rate in non-green buildings than green building.Overall, we see that green building are more concentrated on higher leasing rate, and non green building are more spread on leasing rate.
+
+For non-green buildings, there are significant amount of buildings that have leasing rent less than 10%. Let's check how many buildings have leasing rate <=10.
+
+```{r echo=FALSE,message=FALSE,error=FALSE}
+nrow(subset(green_buildings,(leasing_rate<=10)))
+```
+
+It seems not reasonable for the on-staff stats guru to clean this part of outlier. There are considerable number of these buildings and they may represent an important part of our data.Removing them may cause some bias on the calculation of rent.
+
+Then, the on-staff stats guru just simply separated the green and non-green buildings and subtract their median rent per square foot per yer.
+
+Let's look at the distribution of the rent based on green and non green building.
+
+```{r echo=FALSE,message=FALSE,error=FALSE}
+ggplot(green_buildings)+ggtitle('Rent')+
+geom_histogram(data=green_buildings_not_green,aes(x=Rent),fill='grey')+
+geom_histogram(data=green_buildings_green,aes(x=Rent),fill='green')
+```
+
+Clearly, there are many outliers points that are over $100, so he is right on using median instead of mean since median is more robust to outliers.
+
+However, he cannot jump to the conclusion that green buildings have higher rent by just comparing the median rent between these two groups. this is very very shortsighted because there are many other factor that also influence the rent, and we need further analysis on the possibility of confounding variables for the relationship between rent and green status.
+
+First, Let's run a quick linear regression on rent and other variables, and look at the correlation and potential interactions.
+
+
+```{r echo=FALSE,message=FALSE,error=FALSE}
+fit <- lm(Rent ~ ., data = green_buildings)
+summary(fit)
+```
+
+It appears that the green rating is not that significant on determining the rent.The summary also provides us the target for some potential compounding variables, like class a,cluster, age and size
+
+### Class
+
+```{r echo=FALSE,message=FALSE,error=FALSE}
+medians <- aggregate(Rent ~  class_a, green_buildings, median)
+ggplot(data=green_buildings, aes(x=factor(class_a), y=Rent),color = 'grey') + geom_boxplot()+
+  stat_summary(fun.y=median, colour="grey", geom="point") + 
+  geom_text(data = medians, aes(label = Rent)) +
+  labs(x="Class A", y='Rent')
+```
+
+The median rent of classA building is 28.2 dollar, which is near five dollar higher than those buildings that not belongs to classA, with median rent of 23.5 dollar.
+
+
+```{r echo=FALSE,message=FALSE,error=FALSE}
+ggplot(green_buildings, aes(class_a, ..count..)) + geom_bar(aes(fill = as.factor(green_rating)), position = "dodge")+
+labs(x="Class a", y='Number of buildings', title = 'Class A vs Green Buildings')+
+scale_fill_manual(values=c("grey", "green"))
+```
+Also, more green buildings belongs to ClassA as we see from the graph.
+
+```{r echo=FALSE,message=FALSE,error=FALSE}
+cat('the propotion of green building that belongs to classA =',nrow(subset(green_buildings_green,(class_a == 1)))/nrow(green_buildings_green))
+```
+
+```{r echo=FALSE,message=FALSE,error=FALSE}
+cat('the propotion of not green building that belongs to classA =',nrow(subset(green_buildings_not_green,(class_a == 1)))/nrow(green_buildings_not_green))
+```
+
+The class_a is a compounding variable that both affect rent and green or not. 
+
+### Clusters
+
+```{r echo=FALSE,message=FALSE,error=FALSE}
+ggplot(data=green_buildings) + geom_point(mapping=aes(x=cluster_rent, y=Rent, colour=as.factor(green_rating))) +
+labs(x="Cluster_rent", y='Rent')+
+scale_colour_manual(values=c("grey", "green"))
+```
+Rent is correlated with the cluster rent for both green and not green buildinga
+
+```{r echo=FALSE,message=FALSE,error=FALSE}
+ggplot(data=green_buildings) + geom_point(mapping=aes(x=cluster, y=cluster_rent), colour = 'grey') +
+labs(x="Cluster", y='Cluster rent')
+```
+
+Most of the clusters' rents are concentrated between 10-40 dollar. There are some outliers go up to 60+ too, maybe are those clusters that located in very great location.
+
+So, which cluster the building belongs to, or location can be a compounding variable that affect the rent.Since the developer wants to build the building on East Cesar Chavez, just across I-35 from downtown, he can looks at the cluster rent of this location.
+
+### Age
+
+```{r echo=FALSE,message=FALSE,error=FALSE}
+ggplot()+ ggtitle('Rent Vs. Age')+
+  geom_point(data=green_buildings_not_green, aes(y=Rent,x=age),colour='grey')+
+  geom_point(data=green_buildings_green,aes(y=Rent,x=age),colour='green')
+
+```
+
+Most of the green buildings are younger than non-green buildings. However, there is no clear correlation between age and rent, which means that younger age building may not resulting in a higher rent.
+
+```{r echo=FALSE,message=FALSE,error=FALSE}
+cat('Mean age of green building is  =',mean(green_buildings_green$age))
+```
+
+```{r echo=FALSE,message=FALSE,error=FALSE}
+cat('Mean age of not green building is  =',mean(green_buildings_not_green$age))
+```
+
+Since the  concept of the green building is quite new, the mean age of green building is younger than not green building, and is about 24 years old. So, the assumption that on-staff stat guru made about the green buildings that theywill be earning rents for 30 years or more is reasonable.
+
+### Size
+
+```{r echo=FALSE,message=FALSE,error=FALSE}
+green_buildings %>% group_by(green_rating)%>%
+summarize(med_size = median(size), mean_size = mean(size))
+```
+We can see that green building have larger size than non green building.
+
+```{r echo=FALSE,message=FALSE,error=FALSE}
+ggplot(data=green_buildings) + geom_point(mapping=aes(x=size, y=Rent, colour=as.factor(green_rating))) +
+labs(x="Size", y='Rent')+
+scale_colour_manual(values=c("grey", "green"))
+```
+There is subtle correlation between size and rent that larger the size, higher the rent. 
+
+With all these compounding variables, it becomes very hard to tell whether the increased Revenue Per Square Foot in green buildings really is due to their green rating. The best way to answer this question, is that we need to adjust all other compounding variables to the same level, and than, compare the rent of green and non green buildings.For example, we can find two identical buildings, one is green, one is not green, in the same area and was built at same year. We can make these matches building in to a new data sets and then compare their mean or median. If the rate of green building is still higher, we can then be confident about the economic value of the green buildings. 
+
+Although it is very hard to find enough amount of the exact two same buildings, we can still use this methodology of controlling compounding variables into our analysis.Let's first consider the size of the building. In our case, our building would be 250,000 square feet. let look at the rent difference in this size of building. 
+
+```{r echo=FALSE,message=FALSE,error=FALSE}
+green_buildings_size=subset(green_buildings_green, size<=300000 & size>=200000)
+cat('Median value for green buildings in the 20k-30k sqft size range =',median(green_buildings_size$Rent))
+```
+
+```{r echo=FALSE,message=FALSE,error=FALSE}
+green_buildings_size_not=subset(green_buildings_not_green, size<=300000 & size>=200000)
+cat('Median value for non-green buildings in the 20k-30k sqft size range =',median(green_buildings_size_not$Rent))
+```
+
+In this size range, the green building have a higher range than non green building with a premium about 1 dollar.
+
+In conlusion,the anlysis of the on-staff stat guru is not correct because it fails in considering important compounding variables that affect the rent. Our suggestion is that our developer should focus first on the location of the building and whether it is a class a building. After considering about all these variables, and use our methodology of controlling compounding variables, the developer can then decide whether is worth to pay a 5% expected premium for green certification.
+
+# Question 2: Flights at ABIA
+
+```{r echo=FALSE,message=FALSE,error=FALSE}
+# Read data and import library
+library(MASS)
+library(ISLR)
+library(leaps)
+library(Matrix)
+library(foreach)
+library(mosaic)
+library(tidyverse)
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+set.seed(1)
+df <- read.csv("https://raw.githubusercontent.com/EmmaS1116/STA380/master/data/ABIA.csv",header=TRUE)
+attach(df)
+```
+
+## (a)What time of a year has the minimum delays?
+```{r echo=FALSE,message=FALSE,error=FALSE}
+df$Total_delay = abs(df$ArrDelay) + abs(df$DepDelay)
+
+# combine the month and day of month
+df2 = transform(df, Combined_date=paste(df$Month,df$DayofMonth, df$Year,sep="/"))
+
+# convert the Combined_Date to Date format
+df2$Combined_date = as.Date(df2$Combined_date, format = "%m/%d/%Y")
+#df2
+
+plot(df2$Combined_date, df2$Total_delay,main="Total Delay Minutes Over Year",
+  xlab="Date", ylab="Delay(min)", col = "blue")
+```
+Note that we define the term "delay" as being deviant from the scheduled time no matter it's later or early, since they are both creating inconvenience for certain passengers. Thus, the "total delay" column is using the sum of absolute value of departure and arrival delay.
+
+We can't clearly see what time of year has the minimum delays by minutes, since many points are overlapped. 
+
+Therefore we're going to try to count the delay times to see when is the fewest delays.
+
+```{r echo=FALSE,message=FALSE,error=FALSE}
+# aggregate the number of delay times based on Date.
+delay_df = aggregate(df2$Year ~ df2$Combined_date, data = df2, count)
+delay_df2 = aggregate(df2$Total_delay ~ df2$Combined_date, data = df2, sum)
+
+combined_df = merge(delay_df, delay_df2, by = 'df2$Combined_date', sort = TRUE)
+#combined_df
+
+# reset index and sort the new data
+names(combined_df)[1] <- "Date"
+names(combined_df)[2] <- "Delay_Times"
+names(combined_df)[3] <- "Delay_Length"
+combined_df <-combined_df[order(combined_df$Delay_Times),]
+rownames(combined_df) <- NULL
+combined_df = combined_df[order(combined_df$Delay_Length),]
+#combined_df
+
+ggplot(combined_df, aes(Date, Delay_Length)) +
+  geom_point(aes(color = Delay_Times)) +
+  geom_smooth(se = FALSE) +
+  labs(title = "Delay Times Over Year")
+```
+This plot shows the relationships between Delay_Length and Dates, while the ggplot automatically put months on x-axis rather than using specific dates. And each point was colored depending on the delay times. So we can clearly see how long and how many times of delays over a entire year.
+
+According to the plots shown above, there would be minimum delays during September to November. We got this conclusion based on three reasons. First, there are fewer points spreaded from September to November, which means there are less delays. Also, most points during that period have shorter Delay_Length than other points. Moreover, most pinots in the period of September to November have the darkest color, which indciates there are less number of delays. 
+
+One more thing we want to specify is about why we choose to analyze the delays by period in a year instead of the specific day. Since there are lots of factors would affect flights in a day, such as weather, mechanical problems, and air regulations, our predictions about the delay by days would not help people to make correct decisions. We can't know if today's story would also happen on the same day in the next year. Moreover, people usually would have a rough time range to fly, and they won't cancel their trips just because the day has "high possible delay" based on previous years.
+
+```{r echo=FALSE,message=FALSE,error=FALSE}
+df$Date <- paste(df$Month,df$DayofMonth,df$Year, sep="/")
+df2 <- aggregate(df$Total_delay,list(df$Date), mean, na.rm = T)
+
+# rename columns
+colnames(df2) <- c("Date", "Mean Delay")
+
+# order the dates 
+df2 <- df2[order(as.Date(df2$Date, format="%m/%d/%Y")),]
+
+# a line chart ordered on times for mean Deviance
+plot(as.Date(df2$Date, format="%m/%d/%y"),
+     df2$`Mean Delay`, type="l",
+     xlab="Date", ylab = "Mean Delay", main = "Line Chart of Mean Delay Over the Year", col = 'red')
+
+acf(df2$`Mean Delay`)# check for autocorrelation
+```
+
+In order to see the pattern better, we represent the same data with a line chart as well. From the line chart, we observe that the mean delay reaches its lowest during the period from September to November, which is the best time of the year if you and your family plan to do a annual trip. 
+
+Additionally, we checked for autocorrelaion in total delay. The acf plot indicates that the most obvious pattern is first degree autocorrelation, which is reasonable because delays have Domino effect (airport terminals and gates are occupied)
+
+## (b)Which UniqueCarrier we recommend to choose and which not?
+```{r echo=FALSE,message=FALSE,error=FALSE}
+# which carrier has the least and stable delays
+boxplot(df$Total_delay~df$UniqueCarrier,
+        xlab = "Unique Carrier",
+        ylab = "Total Delay",
+        main = "Boxplot of Total Delay across Carriers",) 
+
+# which carrier has the most flights
+barplot(table(df$UniqueCarrier),
+        xlab = "Unique Carrier",
+        ylab="Number of Flights",
+        las = 2,
+        main="Barplot of Number of Flights across Carriers") 
+
+tapply(df$Total_delay, df$UniqueCarrier, mean, na.rm = T)
+tapply(df$Total_delay, df$UniqueCarrier, sd, na.rm = T)
+```
+By creating a boxplot of total delays across different unique carriers, we found that all carriers have a relatively large number of high outliers (that is why the boxes are barely shown). This also result in that SDs are generally larger than means.
+
+The mean value of total delay table circles EV, OH, and YV as the three carriers with longest average delays (38-41); US, WN, F9 are among the carriers with the shortest delays (21-23)
+
+The standard deviation of each carriers' delays pinpoints NW, YV, B6 as the three most volatile carrier in terms of delay lengths (76-88); US appears to be the most stable one and stands out from others (28.7).  
+
+We combine our findings with how many flights does each carrier has. The barplot indicates that while US has the lowest mean delay and it's the most stable one, it's also has few flights for us to choose; WN has the most flights but it's surprisingly not the carrier with the worst performance overall. 
+
+At the same time, we can analyze this question by looking at times and lengths of delays together, as shown below.
+```{r echo=FALSE,message=FALSE,error=FALSE}
+# aggregate the number of delay times based on Date, and merge them.
+UniqueCarrier_df = aggregate(df$Year ~ df$UniqueCarrier, df, count)
+UniqueCarrier_df2 = aggregate(df$Total_delay ~ df$UniqueCarrier, df, sum)
+
+combined_df = merge(UniqueCarrier_df, UniqueCarrier_df2, by = "df$UniqueCarrier", sort = TRUE)
+#combined_df
+
+# Rename and sort
+names(combined_df)[1] <- "UniqueCarrier"
+names(combined_df)[2] <- "Delay_Times"
+names(combined_df)[3] <- "Delay_Length"
+combined_df <-combined_df[order(combined_df$Delay_Times),]
+#combined_df
+
+# UniqueCarrier with lots of delays:
+UniqueCarrier_delay = combined_df[which(combined_df$Delay_Times > 10000),]
+UniqueCarrier_delay
+
+# Recommend UniqueCarrier:
+UniqueCarrier1_recom = combined_df[which(combined_df$Delay_Times <2500),]
+UniqueCarrier2_recom = combined_df[which(combined_df$Delay_Length <70000),]
+recom_list = merge(UniqueCarrier1_recom, UniqueCarrier2_recom, by = "UniqueCarrier", sort = TRUE)
+recom_list
+```
+
+To sum up, We applied different methods to evaluate different carriers based on the delay times and length of delay. According to the analysis above, we would recommend people to choose EV, NW, UA, US, and F9. These unique carriers have fewer delay times and shorter length of delay. We don't recommend people to take AA and WN, due to their extremely large number of delay times. Keep in mind that some of these high quality carriers have few flights so it might be hard to buy their tickets. 
+
+## What's the most common reason for cancellation and delay?
+
+```{r echo=FALSE}
+table(df$Cancelled) # proportion of the flights cancelled
+1420/nrow(df)
+
+# reasons for the flight cancelled
+df3 <-df[df$Cancelled == 1,]
+barplot(table(df3$CancellationCode), xlab="Cancellation Code", ylab="Frequency", main = "Barplot of Cancellation Reasons")
+
+#reasons for delay analysis
+par(mfrow=c(2,2))
+boxplot(df$CarrierDelay, main = "Boxplot of Carrier Delay")
+boxplot(df$WeatherDelay, main = "Boxplot of Weather Delay")
+boxplot(df$SecurityDelay, main = "Boxplot of Security Delay")
+boxplot(df$LateAircraftDelay, main = "Boxplot of Late Aircraft Delay")
+
+sum(!is.na(df$CarrierDelay))
+summary(df$CarrierDelay)
+
+sum(!is.na(df$WeatherDelay))
+summary(df$WeatherDelay)
+
+sum(!is.na(df$NASDelay))
+summary(df$NASDelay)
+
+sum(!is.na(df$SecurityDelay))
+summary(df$SecurityDelay)
+
+sum(!is.na(df$LateAircraftDelay))
+summary(df$LateAircraftDelay)
+```
+First, we made a table to see that the proportion of flights that was cancelled was only about 1.43%. So passengers needn't to worry too much about their flights being cancelled. 
+
+Next, a barplot is genereated to check which is the most frequent reason for flight cancellation (A-carrier, B-weather, C-NAS, D-security). Carrier(719) ends up being the most common one, followed by weather(605) and NAS(96). There's no case for security reason in our dataset. However, we should be cautious with saying that there's no flight being delayed for security reasons since the data could be missing.
+
+Lastly, we want to see whether the most common delay reason also causes the longest delay. We calculate the sample size for all delay reasons(19747) and found their summary values. Carrier delay has the highest mean value(15.39) followed by NAS(12.47); NAS also has the highest median value(2.00). We can conclude that carrier's reasons such as maintenance or crew problems, aircraft cleaning, baggage loading, fueling, etc cause the longest delay. Other reasons' lengths are trivial compared to this.
+
+# Question 3: Portfolio modeling
+
+We constructed three different portfolios of exchange-traded funds, or ETFs, and used bootstrap resampling to analyze the short-term tail risk of our portfolios. Each of these three portfolios is based on a distinct method of watching market behavior. We'll determine the 5% value at risk for each portfolio using 20 trading day bootstrap resampling on a $100,000 capital investment utilizing the last five years of daily data. At the end of the day, each of these portfolios is redistributed to maintain the given portfolio weights.
+
+
+### Portfolio 1: "Safe Portfolio - Capture the market return"
+
+Portfolio 1 is built on the idea of tracking the market passive movement. The main idea to follow SP&500, Nasdaq market return, and include other ETFs that also has a huge market cap which means they are normally more safe. 
+
+* **20% SPY** SPY has long been one of the best ETFs to invest in; it is the single largest ETF in terms of assets under management (AUM), with over $360 billion. It's incredibly liquid with over 74 million shares traded per day. It is one of the simplest ways to invest on major business in the United States. SPY is an excellent location to lodge money for both new and experienced investors. It will give us returns that almost closely match the market without requiring any investigation.
+
+* **20% QQQ** The Invesco QQQ ETF, which tracks the Nasdaq-100, an index of the Nasdaq Stock Market's 100 largest nonfinancial members, is another failsafe way to track a significant index.
+
+* **20% VUG** VUG ETF concentrates on large-cap U.S.-based growth equities, and its largest holdings include Apple (AAPL), Microsoft (MSFT), Amazon.com (AMZN), Facebook (FB), and Alphabet (GOOG, GOOGL), despite VUG having 280 different stocks.
+
+* **20% VTI** keep track of the CRSP US Total Market Index's performance. Growth and value styles are represented in large, mid, and small-cap equity.Uses an index-sampling approach that is controlled passively.
+
+* **20% VTV** supplement of VTI index.The CRSP US Large Cap Value Index, which measures the investment return of large-capitalization value equities, is being tracked. Provides a simple way to track the performance of many of the country's most popular value stocks.
+
+
+```{r 3.1, echo=FALSE, warning = FALSE, message = FALSE}
+library(mosaic)
+library(quantmod)
+library(foreach)
+
+mystocks = c("SPY", "QQQ", "VUG", "VTI", "VTV")
+myprices = getSymbols(mystocks, from = "2016-08-13")
+
+# A chunk of code for adjusting all stocks
+# creates a new object addind 'a' to the end
+# For example, WMT becomes WMTa, etc
+for(ticker in mystocks) {
+	expr = paste0(ticker, "a = adjustOHLC(", ticker, ")")
+	eval(parse(text=expr))
+}
+
+head(SPYa)
+
+# Combine all the returns in a matrix
+all_returns = cbind(	ClCl(SPYa),
+								ClCl(QQQa),
+								ClCl(VUGa),
+								ClCl(VTIa),
+								ClCl(VTVa))
+#head(all_returns)
+all_returns = as.matrix(na.omit(all_returns))
+
+# Compute the returns from the closing prices
+pairs(all_returns)
+```
+
+The Close-to-Close earnings of each of these ETFs are highly connected, as shown in the pairs correlation matrix above. As a result, as one goes up, the others follow suit. They all fall down when one goes down. This shows that all of these ETFs are following market trends and going in the same direction.
+
+Then we simulate the portfolio's 20-day trading term. 
+
+```{r 3.1.a, echo=FALSE, warning = FALSE, message = FALSE}
+
+# Sample a random return from the empirical joint distribution
+# This simulates a random day
+return.today = resample(all_returns, 1, orig.ids=FALSE)
+
+# Update the value of your holdings
+# Assumes an equal allocation to each asset
+total_wealth = 100000
+my_weights = c(0.2,0.2,0.2, 0.2, 0.2)
+holdings = total_wealth*my_weights
+holdings = holdings*(1 + return.today)
+
+set.seed(17)
+# Now simulate many different possible scenarios  
+initial_wealth = 100000
+sim1 = do(2000)*{
+	total_wealth = initial_wealth
+	weights = c(0.2, 0.2, 0.2, 0.2, 0.2)
+	holdings = weights * total_wealth
+	n_days = 20
+	wealthtracker = rep(0, n_days)
+	for(today in 1:n_days) {
+		return.today = resample(all_returns, 1, orig.ids=FALSE)
+		holdings = holdings + holdings*return.today
+		total_wealth = sum(holdings)
+		wealthtracker[today] = total_wealth
+	}
+	wealthtracker
+}
+
+#print out the hist
+hist(sim1[,n_days], 25, main = "Portfolio 1 - Bootstrapped Portfolio Values")
+
+# Profit/loss
+mean(sim1[,n_days] - initial_wealth)
+hist(sim1[,n_days]- initial_wealth, breaks=30, main = "Portfolio 1 Bootstrapped Profit / Loss")
+abline(v = (quantile(sim1[,n_days], 0.05) - initial_wealth), col = "blue")
+
+# Calculate 5% value at risk
+quantile(sim1[,n_days]- initial_wealth, prob=0.05)
+```
+
+Based on the histograms of portfolio values and earnings, we can see that, while there is still a chance of a loss after a 20-day bootstrapped period, the mean earnings still yield a profit of **about $1607.895**. For this portfolio, VAR at 5% over a 20-day bootstrapped period is **approximately $7074.158**.
+
+### Portfolio 2: "Aggressive portfolio - Risk Award" 
+
+Portfolio 2 is designed to profit from market volatility. These exchange-traded funds (ETFs) are designed for income investors survive in volatile market situations. The portfolio is broken down as follows:
+
+* **25% SCHA** SCHA can give investor access to the stock market in the United States, but it only invests in smaller companies, which have a higher growth potential than much larger corporations. It has around 1,850 holdings and a market value of $4.6 billion, making it a very well-diversified fund. 10x Genomics (TXG), a gene sequencing firm, and Darling Ingredients (DAR), a rendering company that converts animal byproducts into valuable end products, are two of its top ten holdings.
+
+* **25% HDV** iShares Core High Dividend ETF is designed for income investor. With 74 holdings in its portfolio, it is more concentrated than some of the other funds on this list, but its cost ratio is just 0.08 percent, and its dividend yield is 3.7 percent - a nice figure in the current age of low interest rates that the US has been in for almost a decade. This is one of the best ETFs to buy because of its strong yield and solid stock portfolio. Exxon Mobil (XOM), Johnson & Johnson, and Verizon Communications are three of HDV's major holdings (VZ).
+
+* **25% DSI** iShares MSCI KLD 400 Social ETF (DSI): over the last ten years, the ETF has returned an annualized 13.8 percent. The fund focuses on enterprises situated in the United States that have an environmental, social, and governance (ESG) bent, eliminating businesses such as alcohol, firearms, gambling, tobacco, and genetically modified organisms. It has a 0.25 percent expense ratio, 404 positions, and Microsoft, Alphabet, Tesla (TSLA), and Nvidia Corp. (NVDA) are among its top holdings. 
+
+* **25% SDIV** Global X SuperDividend ETF is a mutual fund that invests in superdividend. It invests in around 100 of the world's highest-dividend-yielding equities assets. SDIV not only pays a high yield, but it also pays once a month, ensuring a steady stream of paydays. The yield is definitely high, but these equities clearly have a higher risk profile than established U.S. corporations.
+
+
+```{r 3.2, echo=FALSE, warning = FALSE, message = FALSE}
+mystocks = c("SCHA", "HDV", "DSI", "SDIV")
+myprices = getSymbols(mystocks, from = "2016-08-13")
+
+# A chunk of code for adjusting all stocks
+# creates a new object addind 'a' to the end
+# For example, WMT becomes WMTa, etc
+for(ticker in mystocks) {
+	expr = paste0(ticker, "a = adjustOHLC(", ticker, ")")
+	eval(parse(text=expr))
+}
+
+# Combine all the returns in a matrix
+all_returns = cbind(	ClCl(SCHAa),
+								ClCl(HDVa),
+								ClCl(DSIa),
+								ClCl(SDIVa))
+#head(all_returns)
+all_returns = as.matrix(na.omit(all_returns))
+
+# Compute the returns from the closing prices
+pairs(all_returns)
+
+```
+
+From the pairings plot, we observe that these four ETFs are substantially less correlated than the ETFs in Portfolio 1. As a result, we anticipate greater volatility and a higher Value at Risk in this portfolio.
+
+Then, we simulate the 20-day trading period of this portfolio. 
+
+```{r 3.2.a, echo=FALSE, warning = FALSE, message = FALSE}
+
+# Sample a random return from the empirical joint distribution
+# This simulates a random day
+return.today = resample(all_returns, 1, orig.ids=FALSE)
+
+# Update the value of your holdings
+# Assumes an equal allocation to each asset
+total_wealth = 100000
+my_weights = c(0.25,0.25,0.25,0.25)
+holdings = total_wealth*my_weights
+holdings = holdings*(1 + return.today)
+
+set.seed(17)
+# Now simulate many different possible scenarios  
+initial_wealth = 100000
+sim1 = do(2000)*{
+	total_wealth = initial_wealth
+	weights = c(0.25,0.25,0.25,0.25)
+	holdings = weights * total_wealth
+	n_days = 20
+	wealthtracker = rep(0, n_days)
+	for(today in 1:n_days) {
+		return.today = resample(all_returns, 1, orig.ids=FALSE)
+		holdings = holdings + holdings*return.today
+		total_wealth = sum(holdings)
+		wealthtracker[today] = total_wealth
+	}
+	wealthtracker
+}
+
+#print out the hist
+hist(sim1[,n_days], 25, main = "Portfolio 2 - Bootstrapped Portfolio Values")
+
+# Profit/loss
+mean(sim1[,n_days] - initial_wealth)
+hist(sim1[,n_days]- initial_wealth, breaks=30, main = "Portfolio 2 Bootstrapped Profit / Loss")
+abline(v = (quantile(sim1[,n_days], 0.05) - initial_wealth), col = "blue")
+
+# Calculate 5% value at risk
+quantile(sim1[,n_days]- initial_wealth, prob=0.05)
+```
+
+Based on the histograms of portfolio values and earnings, we can see that, while there is still a chance of a loss after a 20-day bootstrapped period, the mean earnings still yield a profit of **about $1231.849**. For this portfolio, VAR at 5% over a 20-day bootstrapped period is **approximately $7987.424**. Although portfolio 2 generates a lower mean profit with a larger VAR than portfolio 1. We can witness a small probability to generate a profit more than **$40000** which is unable to be achieved by portfolio 1.
+
+### Portfolio 3: "Diversified Portfolio - Risk Averse" 
+
+Portfolio 3 seeks to avoid market volatility to a large instance, whereas Portfolio 2 was established on the premise of profiting from market volatility. These "safe" ETFs are meant to survive market volatility, but their prospective returns are lower. The portfolio is broken down as follows:
+
+* **25% USMV** suitable for investors who participate in the stock market but don't want to deal with the volatility, provide a large portion of the gains that an investment in the SP500 would provide, but with a far lower portion of the risk. It achieves so by investing in equities with a reduced volatility history, such as Eli Lilly (LLY), Kroger (KR), Waste Management (WM), and Johnson & Johnson (JNJ), which are among its top holdings. Since its inception in 2011, USMV has achieved its primary goal, collecting 76 percent of stock market upside and only 62 percent of stock market fall.
+
+* **25% VEU** Vanguard FTSE All-World ex-US ETF is an exchange-traded fund that tracks the performance of the FTSE All-World index (VEU). Switching investments geographically is one of the most effective ways to genuinely diversify, as it exposes you to different economies and currencies. With the exception of the United States, VEU has almost 3,500 stocks across all continents. Europe (40.2 percent), the Pacific (27.2 percent), and emerging markets (27.6 percent) are the three largest geographical allocations (25.6 percent ).
+
+* **25% VCSH** Vanguard Short-Term Corporate Bond ETF is a mutual fund that invests in short-term corporate bonds (VCSH) With an emphasis on high-quality corporate debt and the average bond in the portfolio due in just three years, investors may be confident that their loans will be fully repaid. Although the yield is lower than that of a typical SP 500 dividend stock, the stability you'll find in this short-term bond fund is likely to outweigh the volatility you'll find in the stock market. With $41 billion in assets, this safe-haven fund is a top choice for many risk-averse investors.
+
+* **25% VCIT** Vanguard Intermediate-Term Corporate Bond ETF is a mutual fund that invests in intermediate-term corporate bonds (VCIT). It provides a means to focus just on corporate bonds for individuals searching for a bit more return than an aggregate bond fund that is primarily weighted toward low-risk government bonds. T
+
+
+```{r 3.3, echo=FALSE, warning = FALSE, message = FALSE}
+mystocks = c("USMV", "VEU", "VCSH", "VCIT")
+myprices = getSymbols(mystocks, from = "2016-08-13")
+
+# A chunk of code for adjusting all stocks
+# creates a new object addind 'a' to the end
+# For example, WMT becomes WMTa, etc
+for(ticker in mystocks) {
+	expr = paste0(ticker, "a = adjustOHLC(", ticker, ")")
+	eval(parse(text=expr))
+}
+
+# Combine all the returns in a matrix
+all_returns = cbind(ClCl(USMVa),
+								ClCl(VEUa),
+								ClCl(VCSHa),
+								ClCl(VCITa))
+#head(all_returns)
+all_returns = as.matrix(na.omit(all_returns))
+
+# Compute the returns from the closing prices
+pairs(all_returns)
+```
+
+These ETFs are less correlated than the ETFs in Portfolio 1 and Portfolio 2, according to the pairs correlation matrix.
+
+Then, we simulate the 20-day trading period of this portfolio.
+
+```{r 3.3.a, echo=FALSE, warning = FALSE, message = FALSE}
+# Sample a random return from the empirical joint distribution
+# This simulates a random day
+return.today = resample(all_returns, 1, orig.ids=FALSE)
+
+# Update the value of your holdings
+# Assumes an equal allocation to each asset
+total_wealth = 100000
+my_weights = c(0.25, 0.25, 0.25, 0.25)
+holdings = total_wealth*my_weights
+holdings = holdings*(1 + return.today)
+
+set.seed(17)
+# Now simulate many different possible scenarios  
+initial_wealth = 100000
+sim1 = do(2000)*{
+	total_wealth = initial_wealth
+	weights = c(0.25, 0.25, 0.25, 0.25)
+	holdings = weights * total_wealth
+	n_days = 20
+	wealthtracker = rep(0, n_days)
+	for(today in 1:n_days) {
+		return.today = resample(all_returns, 1, orig.ids=FALSE)
+		holdings = holdings + holdings*return.today
+		total_wealth = sum(holdings)
+		wealthtracker[today] = total_wealth
+	}
+	wealthtracker
+}
+
+#print out the hist
+hist(sim1[,n_days], 25, main = "Portfolio 3 - Bootstrapped Portfolio Values")
+
+# Profit/loss
+mean(sim1[,n_days] - initial_wealth)
+hist(sim1[,n_days]- initial_wealth, breaks=30, main = "Portfolio 3 Bootstrapped Profit / Loss")
+abline(v = (quantile(sim1[,n_days], 0.05) - initial_wealth), col = "blue")
+
+# Calculate 5% value at risk
+quantile(sim1[,n_days]- initial_wealth, prob=0.05)
+```
+Based on the histograms of portfolio values and earnings, we can see that, while there is still a chance of a loss after a 20-day bootstrapped period, the mean earnings still yield a profit of **about $630.5331**. For this portfolio, VAR at 5% over a 20-day bootstrapped period is **approximately $3670.662**. We witnessed a narrower range for the profit/less, generated a less VAR and less return, witch is consistent with the concept of the portfolio 3 risk averse portfolio construction.
+
+### In summary
+
+* Portfolio 1 is excellent for long-term investing. The 5% VaR and the return are the most balanced. And according to many theories, passive investment in market index is the best investment strategy in a long term. Mean earnings **about $1607.895**, VAR at 5% over a 20-day bootstrapped period is **approximately $7074.158**.
+
+* Portfolio 2 is a superior risk fund for the income investors who are willing to generate a higher return at a cost of potential loss. Mean earnings **about $1231.849**, VAR at 5% over a 20-day bootstrapped period is **approximately $7987.424**, with the potential to generate a highest profit more than **$40000**.
+
+* Portfolio 3 is the safest option for risk-averse investors over a 20-day trading period. Mean earnings **about $630.5331**, VAR at 5% over a 20-day bootstrapped period is **approximately $3670.662**.
+
+In general, these portfolios are suitable for investors with different preference. Investors may be further diversify their portfolios by investing in these 3 portfolios simultaneously. We suggests them to invest 65% in portfolio 3, 25% in portfolio 1, and 10% in portfolio 2 to build up a more rounded total portfolio. 
+
+# Question 4: Market segmentation
+
+Our approach to segment the market is to use both kmeans clustering and hierachical clustering to split the users into differnt based on their characteristics. Then, we will report the market segments we have and analyze how the company could potentially take advantage of this information.
+
+## K-means Clustering
+
+To start with, we must decide the optimal number of K, which impacts the interpretability and efficiency of our model. Although we can't cross validate, we will use two quantitative model selection criteria - elbow plot and CH index. In case that the results from these two techniques don't agree, we will use the "satisfice, don't optimize" rule and hand pick a suitable K value. We first per-processed our dataset by getting rid of the three useless columns.
+
+```{r echo=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+
+df <- read.csv("https://raw.githubusercontent.com/jgscott/STA380/master/data/social_marketing.csv", header=TRUE)
+
+df <- df[-c(6,36,37)] # remove adult, spam, uncategorized columns
+library(cluster)
+library(fpc)
+library(ggplot2)
+#library("LICORS")  # for kmeans++
+library(foreach)
+library(mosaic)
+set.seed(123)
+dim(df)
+names(df)[1] <- 'ID'
+
+# scale and center the data
+X = scale(df[,2:34], center=TRUE, scale=TRUE)
+mu = attr(X,"scaled:center")
+sigma = attr(X,"scaled:scale")
+
+k_grid = seq(2,20,by=1)
+
+# determine optimal level of k
+SSE_grid = foreach(k=k_grid, .combine ="c" )%do%{
+  cluster_k = kmeans(X, k, nstart=30)
+  cluster_k$tot.withinss
+}
+
+plot(k_grid, SSE_grid) # elbow plot 
+
+N = nrow(X)
+k_grid = seq(2, 20, by=1)
+CH_grid = foreach(k = k_grid, .combine='c') %do% {
+  cluster_k = kmeans(X, k, nstart=50)
+  W = cluster_k$tot.withinss
+  B = cluster_k$betweenss
+  CH = (B/W)*((N-k)/(k-1))
+  CH
+}
+
+plot(k_grid, CH_grid) # CH index plot
+```
+
+Considering the results from the two plots (we want larger CH index and smaller SSE) and the quality of our model, we decide that the number of clusters to be 5.
+
+```{r echo=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+
+# run kmeans with 5 clusters and 20 starts
+cluster1 <- kmeans(X,5,nstart=25)
+
+# plot the point clusters
+plotcluster(X, cluster1$cluster)
+
+# check total withiness and betweeness
+cluster1$tot.withinss
+cluster1$betweenss
+
+# see which points are in each cluster - example cluster1
+which(cluster1$cluster == 1)[1:20]
+```
+
+After running kmeans clustering, we plot the data points in different colors and obtained a total withiness of 201103.6 and betweeness of 58969.44.
+
+Now we begin analyzing the key features representing each cluster. 
+
+```{r echo=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+
+#combine 5 clusters into a dataframe
+#undo z score to get actual numbers
+df2 <- as.data.frame(cbind(cluster1$center[1,]*sigma + mu, 
+                           cluster1$center[2,]*sigma + mu,
+                           cluster1$center[3,]*sigma + mu,
+                           cluster1$center[4,]*sigma + mu,
+                           cluster1$center[5,]*sigma + mu))
+#rename columns
+names(df2) <- c('Clust1','Clust2','Clust3','Clust4','Clust5')
+
+#Put category names as a column
+df2$category <- rownames(df2)
+
+#Cluster 1
+ggplot(df2, aes(x = reorder(category, Clust1), y=Clust1)) +
+  geom_bar(stat="identity", fill = 'gray0') + 
+  coord_flip() + 
+  labs(title="Cluster 1",
+       x ="Category", y = "Cluster Values")
+
+#Cluster 2 
+ggplot(df2, aes(x =reorder(category, Clust2) , y=Clust2)) +
+  geom_bar(stat="identity", fill = 'gray0') + 
+  coord_flip() + 
+  labs(title="Cluster 2",
+       x ="Category", y = "Cluster Values")
+
+#Cluster 3
+ggplot(df2, aes(x = reorder(category, Clust3), y=Clust3)) +
+  geom_bar(stat="identity", fill = 'gray0') + 
+  coord_flip() + 
+  labs(title="Cluster 3",
+       x ="Category", y = "Cluster Values")
+
+#Cluster 4
+ggplot(df2, aes(x = reorder(category, Clust4), y=Clust4)) +
+  geom_bar(stat="identity", fill = 'gray0') + 
+  coord_flip() + 
+  labs(title="Cluster 4",
+       x ="Category", y = "Cluster Values")
+
+#Cluster 5
+ggplot(df2, aes(x = reorder(category, Clust5), y=Clust5)) +
+  geom_bar(stat="identity", fill = 'gray0') + 
+  coord_flip() + 
+  labs(title="Cluster 5",
+       x ="Category", y = "Cluster Values")
+```
+The five market segments we found are characterized by the following features:
+  Cluster 1: sports fandom, religion, food
+  Cluster 2: chatter, photo sharing, current events
+  Cluster 3: chatter, photo sharing, cooking
+  Cluster 4: health nutrition, personal fitness, chatter
+  Cluster 5: politics, travel, news
+
+* Cluster 1 is characterized by religious, sports fan users who love exploring food; We can consider recommending religions-related cuisines or sports to them.
+
+* Cluster 2 is represented by active users who share photos frequently and care about current events; They are likely to be interested in the latest news from social platform, so we can utilize social media to reach them.
+
+* Cluster 3 is dominated by active users who love posting photos and cooking; We can push advertisements about food recipes or TV shows about food to them. 
+
+* Cluster 4 is a cluster of active users who like working out, body building, and healthy lifestyle; We should consider presenting products like protein bars, organic/fresh fruits to them.
+
+* Cluster 5 is characterized by users who are passionate about politics, watching news, and travelling aroung the world; Political talk shows and news report about foreign countries might be their favorties.
+
+To reinforce our conclusions above, we also make a few plots with cluster membership.
+```{r echo=FALSE, fig.align='left'}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+
+qplot(sports_fandom, religion, data=df, color=factor(cluster1$cluster))
+qplot(photo_sharing, current_events, data=df, color=factor(cluster1$cluster))
+qplot(photo_sharing, cooking, data=df, color=factor(cluster1$cluster))
+qplot(personal_fitness, health_nutrition, data=df, color=factor(cluster1$cluster))
+qplot(politics, travel, data=df, color=factor(cluster1$cluster))
+```
+
+Based on the scatterplots above,  we can clearly see that:
+* Blue dots(factor 4) represent the users who stand out as high in the combination of religion and sports fandom.
+* Purple dots(factor 5) represents the users who rank high in the photo sharing and current events combination.
+* Purple dots(factor 5) **also** indicates outstanding users in the combination of photo sharing and cooking.
+* Orange dots(factor 1) represents the users who have high degrees in both fitness and nutrition.
+* Yellow dots(factor 2) marks the users with high degrees in politics and travel.
+
+## Hierachical Clustering
+
+We also want to use hierachical clustering on our dataset in order to compare our findings from k means clustering.
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+
+X = data.frame(t(X))
+df_distance_matrix<- dist(X, method = "euclidean")
+hier_df<-hclust(df_distance_matrix, method = "average") # run hclust
+cluster2<-cutree(hier_df, k=5) # cut to 5 clusters
+plot(hier_df, cex=0.8) # plot the dendrogram
+
+summary(factor(cluster2))
+```
+By examing the tree diagram above, we can identify the following market segments:
+  * College students (those who like online games, sports, arts, college, etc)
+  * Business professionals or politicians (users who travels, have automotives, watch news, and use computers)
+  * Athletes, body builders, or models (do outdoor exercises, care about fitness and nutrition)
+  * Middle class young females (who are passionate about fashion, listen to music, do online shopping, share photos about their life and active on the Internet).
+  * Rebellious male teenagers (huge fan of sports starts, dating others, aganist parenting, mostly surrounded by family and school)
+  
+Overall, Kmeans and hierachical clustering obtained similar market segments. Monitoring twitter trends helps the company to gain a better understanding of approaching a specific customer and react to customers' preference changes. How the company could benefit from our analysis depends on what its target customers are and the functions nature of their products.
+
+
+
+# Question 5: Author attribution
+
+In this question, we need to build the best performing model to predict the author of an article on the basis of that article's textual content. Our solution is divided in three parts. First part is the data preprocessing, including tokenization, building doc-term-matrixes for train and test data, and balanced the new words in test data. The second part is the PCA analysis for dimension reduction. The last part is modelling, where we used knn, random forests and naive bays models on our data, and then pick the best performing model based on the accuracy on test data.
+
+## Part 1 Data Preprocessing
+
+```{r echo=FALSE,message=FALSE,error=FALSE}
+## Rolling two directories together into a single corpus
+library(tm) 
+library(tidyverse)
+library(slam)
+library(proxy)
+library(class)
+library(randomForest)
+library('e1071')
+library(caret)
+
+## This wraps another function around readPlain to read
+## plain text documents in English.
+readerPlain = function(fname){
+				readPlain(elem=list(content=readLines(fname)), 
+							id=fname, language='en') }
+```
+First, we read in our train data, by rolling 50 directories together into a single corpus. We also cleaned up the file names and renamed the articles. We also built a corpus for all the documents.
+
+```{r echo=FALSE,message=FALSE,error=FALSE}
+## Rolling 50 directories together into a single corpus
+author_dirs = Sys.glob('~/Desktop/project/STA380/data/ReutersC50/C50train/*')
+file_list = NULL
+labels = NULL
+for(author in author_dirs) {
+	author_name = substring(author, first=29)
+	files_to_add = Sys.glob(paste0(author, '/*.txt'))
+	file_list = append(file_list, files_to_add)
+	labels = append(labels, rep(author_name, length(files_to_add)))
+}
+```
+
+```{r echo=FALSE,message=FALSE,error=FALSE}
+all_docs = lapply(file_list, readerPlain) 
+names(all_docs) = file_list
+names(all_docs) = sub('.txt', '', names(all_docs))
+
+my_corpus = Corpus(VectorSource(all_docs))
+```
+
+Second, we took some pre-processing/tokenization steps, including:
+1) make everything lowercase
+2) remove numbers
+3) remove punctuation
+4) remove excess white-space
+5) Remove stopwords("SMART","en")
+
+```{r echo=FALSE,message=FALSE,error=FALSE,warning = FALSE}
+my_corpus = tm_map(my_corpus, content_transformer(tolower)) # make everything lowercase
+my_corpus = tm_map(my_corpus, content_transformer(removeNumbers)) # remove numbers
+my_corpus = tm_map(my_corpus, content_transformer(removePunctuation)) # remove punctuation
+my_corpus = tm_map(my_corpus, content_transformer(stripWhitespace)) ## remove excess white-space
+my_corpus = tm_map(my_corpus, content_transformer(removeWords), stopwords("SMART"))
+my_corpus = tm_map(my_corpus, content_transformer(removeWords), stopwords("en"))
+```
+
+Third, we created DTM(doc-term-matrix) for the train data set
+
+```{r echo=FALSE,message=FALSE,error=FALSE}
+DTM = DocumentTermMatrix(my_corpus)
+DTM # some basic summary statistics
+```
+
+As we can see that after pre-processing, there are 2500 documents with 32241 terms(such a huge number), and the Sparsity is 99%
+
+Fourth, we dropped those terms that only occur in one or two documents.This is a common step: the noise of the "long tail" (rare terms) can be huge, and there is nothing to learn if a term occurred once.
+Here, wer removed those terms that have count 0 in >95% of docs.  
+
+```{r echo=FALSE,message=FALSE,error=FALSE}
+DTM = removeSparseTerms(DTM, 0.95)
+DTM
+```
+
+After doing this step, our terms significantly dropped to 660 and Sparsity becomes 86%
+
+Last, we constructed the TF IDF weights for the DTM and created dense matrix for train data called Train. 
+
+```{r echo=FALSE,message=FALSE,error=FALSE}
+tfidf = weightTfIdf(DTM)
+```
+
+```{r echo=FALSE,message=FALSE,error=FALSE}
+Train = as.matrix(tfidf)
+```
+
+After We got our ideal train data set, we repeated all these steps again for the C50 test documents and finally got our test data set as well. 
+
+```{r echo=FALSE,message=FALSE,error=FALSE}
+## Rolling 50 directories together into a single corpus
+author_dirs = Sys.glob('~/Desktop/project/STA380/data/ReutersC50/C50test/*')
+file_list = NULL
+labels_test = NULL
+for(author in author_dirs) {
+	author_name = substring(author, first=29)
+	files_to_add = Sys.glob(paste0(author, '/*.txt'))
+	file_list = append(file_list, files_to_add)
+	labels_test = append(labels_test, rep(author_name, length(files_to_add)))
+}
+```
+
+```{r echo=FALSE,message=FALSE,error=FALSE}
+all_docs = lapply(file_list, readerPlain) 
+names(all_docs) = file_list
+names(all_docs) = sub('.txt', '', names(all_docs))
+
+my_corpus = Corpus(VectorSource(all_docs))
+```
+
+```{r echo=FALSE,message=FALSE,error=FALSE,warning = FALSE}
+my_corpus = tm_map(my_corpus, content_transformer(tolower)) # make everything lowercase
+my_corpus = tm_map(my_corpus, content_transformer(removeNumbers)) # remove numbers
+my_corpus = tm_map(my_corpus, content_transformer(removePunctuation)) # remove punctuation
+my_corpus = tm_map(my_corpus, content_transformer(stripWhitespace)) ## remove excess white-space
+my_corpus = tm_map(my_corpus, content_transformer(removeWords), stopwords("SMART"))
+my_corpus = tm_map(my_corpus, content_transformer(removeWords), stopwords("en"))
+```
+
+```{r echo=FALSE,message=FALSE,error=FALSE}
+DTM = DocumentTermMatrix(my_corpus)
+DTM # some basic summary statistics
+```
+For test data, after pre-processing, there are 2500 documents with 33048 terms, and the Sparsity is 99%
+```{r echo=FALSE,message=FALSE,error=FALSE}
+DTM = removeSparseTerms(DTM, 0.95)
+DTM
+```
+
+After doing this step, our terms significantly dropped to 676 and Sparsity becomes 86%. We noticed that there are 16 new word occurred, compared to the train data.
+
+To deal with the "new word issue" the way we choose is to ignore these 16 words, since it only about 2% of our data. We redo the doc term matrix again for our train data.
+
+```{r echo=FALSE,message=FALSE,error=FALSE}
+DTM2 = DocumentTermMatrix(my_corpus,list(dictionary=colnames(Train)))
+DTM2 
+```
+
+Now, both our train and test data sets have 660 terms. 
+
+```{r echo=FALSE,message=FALSE,error=FALSE}
+tfidf = weightTfIdf(DTM2)
+```
+
+```{r echo=FALSE,message=FALSE,error=FALSE}
+Test = as.matrix(tfidf)
+```
+
+## Part 1 Dimensionality reduction using PCA analysis
+
+First, let's check if there are columns that are zero on our test and train data set.
+
+Train:
+
+```{r echo=FALSE,message=FALSE,error=FALSE}
+summary(colSums(Train))
+```
+
+Test:
+
+```{r echo=FALSE,message=FALSE,error=FALSE}
+summary(colSums(Test))
+```
+
+We need to remove those columns.
+
+```{r echo=FALSE,message=FALSE,error=FALSE}
+scrub_cols = which(colSums(Train) == 0)
+Train = Train[,-scrub_cols]
+```
+
+```{r echo=FALSE,message=FALSE,error=FALSE}
+scrub_cols = which(colSums(Test) == 0)
+Test = Test[,-scrub_cols]
+```
+
+Then, we run the PCA analysis on the data to choose check our principle components.
+
+```{r echo=FALSE,message=FALSE,error=FALSE}
+pca = prcomp(Train, scale=TRUE)
+predictions = predict(pca, newdata = Test)
+```
+
+```{r echo=FALSE,message=FALSE,error=FALSE}
+vars <- apply(pca$x, 2, var)  
+props <- vars / sum(vars)
+plot(cumsum(props))
+```
+For this case, we use 200 principle components that explain about 60% of the variance. We also need to reformat our data
+
+```{r echo=FALSE,message=FALSE,error=FALSE}
+train = data.frame(pca$x[,1:200])
+train['author']=labels
+train_load = pca$rotation[,1:200]
+test <- scale(Test) %*% train_load
+test <- as.data.frame(test)
+test['author']=labels_test
+```
+
+Our our data is ready to run the model
+
+## Part 3 Modelling
+
+### Knn
+
+First, we tried the Knn model with k = 10 
+
+```{r echo=FALSE,message=FALSE,error=FALSE}
+set.seed(1)
+
+xtrain = subset(train, select = c(1:200))
+ytrain = as.factor(train[,201])
+xtest = subset(test, select = c(1:200))
+ytest = as.numeric(factor(test[,201]))
+
+knn = knn(xtrain, xtest, ytrain, k = 20)
+
+```
+
+```{r echo=FALSE,message=FALSE,error=FALSE}
+
+Result = as.data.frame(cbind(knn,ytest))
+accuracy = ifelse(as.integer(knn)==as.integer(ytest),1,0)
+sum(accuracy)/nrow(Result)
+```
+
+The accuracy is very low, only 3.24%. It is a very bad model.
+
+### Random Forest
+
+Then We Used Randaom Forest model for our data and the mtry = 14, the square root of 200. 
+
+```{r echo=FALSE,message=FALSE,error=FALSE}
+set.seed(1)
+RF_model<-randomForest(as.factor(author)~.,data=train, mtry=14,importance=TRUE)
+predict_RF<-predict(RF_model,data=test)
+predicted<-predict_RF
+actual<-as.factor(test$author)
+RFresult<-as.data.frame(cbind(actual,predicted))
+RFresult$flag<-ifelse(RFresult$actual==RFresult$predicted,1,0)
+sum(RFresult$flag)/nrow(RFresult)
+```
+
+The model shows a very high accuracy of 73.36%, much better than knn.
+
+### Naive Bays
+
+Finally, let's come to the method that our professor used on class: Naive bays,
+
+```{r 5.5.3, echo=FALSE, warning = FALSE, message = FALSE}
+Naive_model=naiveBayes(as.factor(author)~.,data=train)
+predict_Naive=predict(Naive_model,test)
+
+actual_nm=as.factor(test$author)
+Nresult<-as.data.frame(cbind(actual_nm,predict_Naive))
+Nresult$flag<-ifelse(Nresult$actual_nm==Nresult$predict_Naive,1,0)
+
+sum(Nresult$flag)/nrow(Nresult)
+```
+
+The accuracy is also incredibly low, only 4%. It is a very also bad model.
+
+## Conclusion
+Base on these three attempts of modelling, the random forest model performed best on our data with 73.36% accuracy. 
+
+# Question 6: Association rule mining
+Use the data on grocery purchases in groceries.txt and find some interesting association rules for these shopping baskets. Pick your own thresholds for lift and confidence; just be clear what these thresholds are and how you picked them. Do your discovered item sets make sense? Present your discoveries in an interesting and concise way.
+
+Notes:
+Like with the first problem: this is an exercise in visual and numerical story-telling. Do be clear in your description of what you've done, but keep the focus on the data, the figures, and the insights your analysis has drawn from the data.
+The data file is a list of baskets: one row per basket, with multiple items per row separated by commas. You'll have to cobble together a few utilities for processing this into the format expected by the "arules" package. This is not intrinsically all that hard, but it is the kind of data-cleaning and pre-processing wrinkle you'll encounter frequently on real problems, where your software package expects data in one format and the data comes in a different format. Figuring out how to bridge that gap is part of the assignment, and so we won't be giving tips on this front.
+
+In this question, we're discovering relationships among commonly purchased together grocery items. 
+
+```{r echo=FALSE,message=FALSE,error=FALSE}
+rm(list=ls())
+library(tidyverse)
+library(arules)
+library(arulesViz)
+df <- read.table("https://raw.githubusercontent.com/EmmaS1116/STA380/master/data/groceries.txt", sep = ',', header = FALSE, fill = TRUE)
+summary(df)
+```
+In this txt file, each row represents a basket, and there are four spaces in each baskets. However, the number of items in each baskets are different, which results in lots of missing values in this file. So we are going to do the data-cleaning first.
+
+```{r echo=FALSE,message=FALSE,error=FALSE}
+#convert the file from a txt to a dataframe
+library(reshape2)
+#give a ID for each row
+#and create two columns, one is customer id number, and the other one is th elist of items
+dfid <- tibble::rowid_to_column(df, "customer")
+df2 <- melt(dfid, id.vars = c("customer"))
+df2$variable <- NULL
+attach(df2)
+
+#create four spaces for each customer, and then remove all missing values
+df2 <- df2[order(customer),]
+detach(df2)
+df2 <- df2[!apply(df2 == "", 1, any),]
+str(df2)
+
+summary(df2)
+```
+
+In order to find out shopping patterns among customers, we need to conclude the most frequent items in the dataset.
+```{r echo=FALSE,message=FALSE,error=FALSE}
+#Find the 20 most popular (highest frequency) items.
+summary(df2$value, maxsum=Inf)
+head(df2$value, 20)
+
+frquency = table(df2$value)
+df_frq = as.data.frame(frquency)
+df_frq <- df_frq[-c(1),]
+attach(df_frq)
+df_frq <- df_frq[order(-Freq),]
+barplot(df_frq$Freq[1:20], names=df_frq$Var1[1:20], las=2, cex.names=0.6, main = 'Most frequently purchased items')
+detach(df_frq)
+```
+Based on the plot above, the most popular item in the dataset is whole milk, and then other vegetables, rolls/buns, soda, and yogurt are also top popular items. 
+
+In order to figure out the associations among these items, we are going to apply the apriori method. 
+```{r echo=FALSE,message=FALSE,error=FALSE}
+#split items which could be plugged into the algorithm
+df2$customer = factor(df2$customer)
+grocs = split(x=df2$value, f=df2$customer)
+grocs = lapply(grocs, unique)
+grocs_trans = as(grocs, "transactions")
+summary(grocs_trans)
+
+#apply apriori to get combinations
+grocs_rules = apriori(grocs_trans, 
+                     parameter=list(support=.01, confidence=.1, maxlen=4))
+inspect(grocs_rules)
+```
+According to the results above, there are 45 combinations which match the criteria. 
+In this part. we used support as 0.01, confidence as 0.1 and maxlen as 4 to identify the rules of shopping. And we may conclude more specific rules by adjusting the value of support and confidence. (We don't change the maxlen since there should be maximum 4 items in each basket.) 
+
+```{r echo=FALSE,message=FALSE,error=FALSE}
+#improving support from 0.01 to 0.015
+grocs_rules = apriori(grocs_trans, parameter=list(support=.015, confidence=.1, maxlen=4))
+inspect(grocs_rules)
+
+#improving confidence from 0.1 to 0.2
+grocs_rules = apriori(grocs_trans, 
+                     parameter=list(support=.015, confidence=.2, maxlen=4))
+inspect(grocs_rules)
+```
+When the support increased to 0.015, there are 20 types of combination. And then we get 8 different types of combination when we increased the confidence from 0.1 to 0.2.
+Based on the results above, we noticed that some combinations occurred frequently, such as vegetables + whole milk, other vegetables + tropical fruit, and tropical fruit and whole milk. It indicates that when a customer buy tropical, it highly possible that he/she would purchase the whole milk or other vegetables as well. So these three items are made of the most frequent bundles in the dataset.
+
+
+Let's see more details about the rules we concluded above
+```{r echo=FALSE,message=FALSE,error=FALSE}
+#plot the 8 rules we got above
+plot(grocs_rules, method='two-key plot')
+
+# can now look at subsets driven by the plot
+inspect(subset(grocs_rules, support > 0.015))
+inspect(subset(grocs_rules, confidence > 0.3))
+
+# graph-based visualization
+sub1 = subset(grocs_rules, subset=confidence > 0.01 & support > 0.005)
+summary(sub1)
+
+plot(head(sub1, 25, by='lift'), method='graph')
+```
+In conclusion, whole milk, vegetables, and tropical fruits are highly associated items, while they are most popular items in the dataset. Upon close placement of pairs that see high confidence and support, we can expect to see positive results in sales as they give ease of access to shoppers while filling their cart. For items that see high confidence in X,Y pairs, we must try to place Y close to X if we are not doing so for a similar reason. Complementary items of high association pairs can be placed at checkout counter as well to drive impulse purchase behavior. Therefore, we could learn more about purchase patterns by checking association rules for shopping basket, and then improve our sales and services based on customers' shopping behaviors.
+
+
